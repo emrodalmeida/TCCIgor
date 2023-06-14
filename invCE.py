@@ -53,20 +53,40 @@ def _assign_uncertainty(dc_data):
     return dc_data
 
 
-#TODO: deprecated. usar cria_malha_v2
-def cria_malha(dc_data, topo_xyz, domain, core_domain):
-    dom_x, dom_z, delta_h = domain
-    xi, xf, zf, zi = core_domain
-    mesh = _define_base_mesh(dom_x, dom_z, delta_h)
+def cria_malha(dc_data, topo_xyz, mesh_param):
+    """
+    https://discretize.simpeg.xyz/en/main/api/generated/discretize.utils.mesh_builder_xyz.html
+    
+    https://simpeg.discourse.group/t/using-mesh-builder-xyz/66/3
+    """
+   
+    dh = mesh_param['delta_h']
+    pad = mesh_param['padding']
+    
+    coordinates = _get_unique_electrode_locations(dc_data)
+    mesh = mesh_builder_xyz(coordinates, [dh, dh],
+                            padding_distance=[[pad, pad], [pad, 0.0]],
+                            depth_core=pad,
+                            mesh_type='tree')
     mesh = _refine_mesh_topography(mesh, topo_xyz)
     mesh = _refine_mesh_electrodes(mesh, dc_data)
-    mesh = _refine_mesh_core(mesh, xi, xf, zf, zi)
+    x_min, x_max, z_min, z_max = _calc_core_coordinates(coordinates, pad)    
+    mesh = _refine_mesh_core(mesh, x_min, x_max, z_min, z_max)
     mesh.finalize()
     return mesh
 
 
+def _get_unique_electrode_locations(dc_data):
+    electrode_locations = np.c_[dc_data.survey.locations_a, dc_data.survey.locations_b,
+                                dc_data.survey.locations_m, dc_data.survey.locations_n]
+    return np.unique(np.reshape(electrode_locations, (4*dc_data.survey.nD, 2)), axis=0)
 
 
+def _calc_core_coordinates(coord, pad):
+    xmin, xmax = [np.min(coord[:, 0] - pad/2.0), np.max(coord[:, 0]) + pad/2.0]
+    zmin, zmax = [np.min(coord[:, 1]), np.max(coord[:, 1])]
+    zmin -= (xmax - xmin) / 2.0
+    return [xmin, xmax, zmin, zmax]
 
 
 def _define_base_mesh(domain_width_x, domain_width_z, dh):
@@ -246,40 +266,7 @@ def plota_malha(mesh, dom, topo_xyz):
     
 
 
-def cria_malha_v2(dc_data, topo_xyz, mesh_param):
-    """
-    https://discretize.simpeg.xyz/en/main/api/generated/discretize.utils.mesh_builder_xyz.html
-    
-    https://simpeg.discourse.group/t/using-mesh-builder-xyz/66/3
-    """
-    
-    dh = mesh_param['delta_h']
-    pad = mesh_param['padding']
-    
-    coordinates = _get_unique_electrode_locations(dc_data)
-    mesh = mesh_builder_xyz(coordinates, [dh, dh],
-                            padding_distance=[[pad, pad], [pad, 0.0]],
-                            depth_core=pad,
-                            mesh_type='tree')
-    mesh = _refine_mesh_topography(mesh, topo_xyz)
-    mesh = _refine_mesh_electrodes(mesh, dc_data)
-    x_min, x_max, z_min, z_max = _calc_core_coordinates(coordinates, pad)    
-    mesh = _refine_mesh_core(mesh, x_min, x_max, z_min, z_max)
-    mesh.finalize()
-    return mesh
 
-
-def _get_unique_electrode_locations(dc_data):
-    electrode_locations = np.c_[dc_data.survey.locations_a, dc_data.survey.locations_b,
-                                dc_data.survey.locations_m, dc_data.survey.locations_n]
-    return np.unique(np.reshape(electrode_locations, (4*dc_data.survey.nD, 2)), axis=0)
-
-
-def _calc_core_coordinates(coord, pad):
-    xmin, xmax = [np.min(coord[:, 0] - pad/2.0), np.max(coord[:, 0]) + pad/2.0]
-    zmin, zmax = [np.min(coord[:, 1]), np.max(coord[:, 1])]
-    zmin -= (xmax - xmin) / 2.0
-    return [xmin, xmax, zmin, zmax]
 
 
 
@@ -289,10 +276,10 @@ def _calc_core_coordinates(coord, pad):
 
 #if __name__=='__main__':
 topografia, dados = load_dados()
-
+dominio_dados = [-410.0, 410.0, 0.0, 300.0]
 parametros_malha = {'delta_h': 2.0,
                     'padding': 200.0}
-malha = cria_malha_v2(dados, topografia, parametros_malha)
+malha = cria_malha(dados, topografia, parametros_malha)
 
 dados.survey = project_surveys_topography(dados, topografia, malha)
 
@@ -304,7 +291,7 @@ problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inici
 lista_diretivas = define_inversion_directives()
 modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
 
-dominio_dados = [-450.0, 450.0, 0.0, 300.0]
+
 plota_dados(dados, dominio_dados, topografia)
 plota_malha(malha, dominio_dados, topografia)
 plota_resultados(modelo_invertido, topografia, malha, dominio_dados)
