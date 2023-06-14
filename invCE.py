@@ -187,20 +187,22 @@ def run_inversion(inv_prob, directives_list, starting_conductivity_model):
     return dc_inversion.run(starting_conductivity_model)
 
 
-def plota_dados(dc_data):
+def plota_dados(dc_data, dom):
     fig = plt.figure(figsize=FIGSIZE)
     ax1 = fig.add_axes([0.1, 0.3, 0.8, 0.5])
     plot_pseudosection(dc_data, plot_type='contourf', ax=ax1, scale='log', 
                        data_type='apparent conductivity', 
                        cbar_label=r'$\sigma$ (S/m)', mask_topography=True,
                        contourf_opts={'levels': 100, 'cmap': COLORMAP})
+    ax1.set_xlim([dom[0], dom[1]])
+    ax1.set_ylim([-1*dom[3], dom[2]])
     ax1.set_title('Pseudo-seção de condutividade aparente')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Pseudo-profundidade (m)')
     plt.tight_layout()
 
 
-def plota_resultados(recovered_conductivity_model, topo_xyz, mesh):
+def plota_resultados(recovered_conductivity_model, topo_xyz, mesh, dom):
     ind_active = _get_2d_active_indices(topo_xyz, mesh)
     active_map = maps.InjectActiveCells(mesh, ind_active, CONDUTIVIDADE_AR)
     conductivity_map = active_map * maps.ExpMap()
@@ -214,6 +216,8 @@ def plota_resultados(recovered_conductivity_model, topo_xyz, mesh):
     ax1 = fig.add_axes([0.14, 0.17, 0.68, 0.7])
     mesh.plotImage(recovered_conductivity, normal='Y', ax=ax1, 
                     grid=False, pcolor_opts={'norm': LogNorm(), 'cmap': COLORMAP})
+    ax1.set_xlim([dom[0], dom[1]])
+    ax1.set_ylim([-1*dom[3], dom[2]])
     ax1.set_title('Modelo Invertido')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Profundidade (m)')
@@ -226,20 +230,17 @@ def plota_resultados(recovered_conductivity_model, topo_xyz, mesh):
     plt.tight_layout()
 
 
-def plota_malha(mesh):
+def plota_malha(mesh, dom):
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_axes([0.1, 0.1, 0.75, 0.85])
     mesh.plotGrid(ax=ax1)
+    ax1.set_xlim([dom[0], dom[1]])
+    ax1.set_ylim([-1*dom[3], dom[2]])
     ax1.set_title('Discretização do espaço do modelo')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Profundidade (m)')
     plt.tight_layout()
     
-
-
-
-
-
 
 
 def cria_malha_v2(dc_data, topo_xyz, mesh_param):
@@ -259,13 +260,7 @@ def cria_malha_v2(dc_data, topo_xyz, mesh_param):
                             mesh_type='tree')
     mesh = _refine_mesh_topography(mesh, topo_xyz)
     mesh = _refine_mesh_electrodes(mesh, dc_data)
-    
-    
-    
-    x_min, x_max = [np.min(coordinates[:, 0]-pad/2.0), np.max(coordinates[:, 0])+pad/2.0]
-    z_min, z_max = [np.min(coordinates[:, 1]), np.max(coordinates[:, 1])]
-    z_min -= (x_max-x_min) / 2.0
-    
+    x_min, x_max, z_min, z_max = _calc_core_coordinates(coordinates, pad)    
     mesh = _refine_mesh_core(mesh, x_min, x_max, z_min, z_max)
     mesh.finalize()
     return mesh
@@ -277,29 +272,39 @@ def _get_unique_electrode_locations(dc_data):
     return np.unique(np.reshape(electrode_locations, (4*dc_data.survey.nD, 2)), axis=0)
 
 
+def _calc_core_coordinates(coord, pad):
+    xmin, xmax = [np.min(coord[:, 0] - pad/2.0), np.max(coord[:, 0]) + pad/2.0]
+    zmin, zmax = [np.min(coord[:, 1]), np.max(coord[:, 1])]
+    zmin -= (xmax - xmin) / 2.0
+    return [xmin, xmax, zmin, zmax]
+
+
 
 # ---------------------------------------------------------------------------
 
-parametros_malha = {'delta_h': 2.0,
-                    'padding': 200.0}
 
 
-condutividade_background = 1e-2
+if __name__=='__main__':
+    topografia, dados = load_dados()
 
-
-topografia, dados = load_dados()
-malha = cria_malha_v2(dados, topografia, parametros_malha)
-dados.survey = project_surveys_topography(dados, topografia, malha)
-modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
-simulacao = define_simulation_physics(dados, topografia, malha)
-problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inicial, simulacao)
-lista_diretivas = define_inversion_directives()
-modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
-
-
-plota_dados(dados)
-plota_malha(malha)
-plota_resultados(modelo_invertido, topografia, malha)
+    parametros_malha = {'delta_h': 2.0,
+                        'padding': 200.0}
+    malha = cria_malha_v2(dados, topografia, parametros_malha)
+    
+    dados.survey = project_surveys_topography(dados, topografia, malha)
+    
+    condutividade_background = 1e-2
+    modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
+    
+    simulacao = define_simulation_physics(dados, topografia, malha)
+    problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inicial, simulacao)
+    lista_diretivas = define_inversion_directives()
+    modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
+    
+    dominio_dados = [-450.0, 450.0, 0.0, 300.0]
+    plota_dados(dados, dominio_dados)
+    plota_malha(malha, dominio_dados)
+    plota_resultados(modelo_invertido, topografia, malha, dominio_dados)
 
 
 # ---------------------------------------------------------------------------
