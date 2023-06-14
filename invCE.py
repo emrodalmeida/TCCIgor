@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
  
 from discretize import TreeMesh
-from discretize.utils import mkvc, refine_tree_xyz, active_from_xyz
+from discretize.utils import mkvc, refine_tree_xyz, active_from_xyz, mesh_builder_xyz
 
 from SimPEG.utils import model_builder
 from SimPEG import (maps, data_misfit, regularization, optimization,
@@ -57,6 +57,31 @@ def cria_malha(dc_data, topo_xyz, domain, core_domain):
     dom_x, dom_z, delta_h = domain
     xi, xf, zf, zi = core_domain
     mesh = _define_base_mesh(dom_x, dom_z, delta_h)
+    mesh = _refine_mesh_topography(mesh, topo_xyz)
+    mesh = _refine_mesh_electrodes(mesh, dc_data)
+    mesh = _refine_mesh_core(mesh, xi, xf, zf, zi)
+    mesh.finalize()
+    return mesh
+
+
+
+def cria_malha_v2(dc_data, topo_xyz, domain, core_domain):
+    """
+    https://discretize.simpeg.xyz/en/main/api/generated/discretize.utils.mesh_builder_xyz.html
+    
+    https://simpeg.discourse.group/t/using-mesh-builder-xyz/66/3
+    """
+    
+    dom_x, dom_z, delta_h = domain
+    xi, xf, zf, zi = core_domain
+    
+    electrode_locations = np.c_[dados.survey.locations_a, dados.survey.locations_b,
+                                dados.survey.locations_m, dados.survey.locations_n]
+    unique_locations = np.unique(np.reshape(electrode_locations, (4*dados.survey.nD, 2)), axis=0)
+
+    mesh = mesh_builder_xyz(unique_locations, [2.0, 2.0],
+                            padding_distance=[[200.0, 200.0], [200.0, 0.0]],
+                            mesh_type='tree')
     mesh = _refine_mesh_topography(mesh, topo_xyz)
     mesh = _refine_mesh_electrodes(mesh, dc_data)
     mesh = _refine_mesh_core(mesh, xi, xf, zf, zi)
@@ -237,13 +262,14 @@ def plota_malha(mesh):
 
 # ---------------------------------------------------------------------------
 
-dominio_malha = [1000.0, 1000.0, 1.0]
-foco_malha = [-300.0, 300.0, -300.0, 0.0]
+dominio_malha = [2000.0, 1000.0, 9.0]
+foco_malha = [-600.0, 600.0, -300.0, 0.0]
 condutividade_background = 1e-2
 
 
 topografia, dados = load_dados()
-malha = cria_malha(dados, topografia, dominio_malha, foco_malha)
+# malha = cria_malha(dados, topografia, dominio_malha, foco_malha)
+malha = cria_malha_v2(dados, topografia, dominio_malha, foco_malha)
 dados.survey = project_surveys_topography(dados, topografia, malha)
 modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
 simulacao = define_simulation_physics(dados, topografia, malha)
@@ -258,9 +284,6 @@ plota_resultados(modelo_invertido, topografia, malha, foco_malha)
 
 
 # ---------------------------------------------------------------------------
-
-
-
 
 
 
