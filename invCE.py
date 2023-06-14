@@ -225,11 +225,19 @@ def plota_resultados(recovered_conductivity_model, topo_xyz, mesh, core_mesh):
     plt.tight_layout()
 
 
-
+def plota_malha(mesh):
+    fig = plt.figure(figsize=(10, 4))
+    ax1 = fig.add_axes([0.1, 0.1, 0.75, 0.85])
+    mesh.plotGrid(ax=ax1)
+    ax1.set_title('Discretização do espaço do modelo')
+    ax1.set_xlabel('Distância (m)')
+    ax1.set_ylabel('Profundidade (m)')
+    plt.tight_layout()
+    
 
 # ---------------------------------------------------------------------------
 
-dominio_malha = [3200.0, 2400, 1.0]
+dominio_malha = [1000.0, 1000.0, 1.0]
 foco_malha = [-300.0, 300.0, -300.0, 0.0]
 condutividade_background = 1e-2
 
@@ -245,11 +253,11 @@ modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inici
 
 
 plota_dados(dados)
+plota_malha(malha)
 plota_resultados(modelo_invertido, topografia, malha, foco_malha)
 
 
 # ---------------------------------------------------------------------------
-
 
 
 
