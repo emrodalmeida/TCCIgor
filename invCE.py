@@ -53,6 +53,7 @@ def _assign_uncertainty(dc_data):
     return dc_data
 
 
+#TODO: deprecated. usar cria_malha_v2
 def cria_malha(dc_data, topo_xyz, domain, core_domain):
     dom_x, dom_z, delta_h = domain
     xi, xf, zf, zi = core_domain
@@ -65,28 +66,7 @@ def cria_malha(dc_data, topo_xyz, domain, core_domain):
 
 
 
-def cria_malha_v2(dc_data, topo_xyz, domain, core_domain):
-    """
-    https://discretize.simpeg.xyz/en/main/api/generated/discretize.utils.mesh_builder_xyz.html
-    
-    https://simpeg.discourse.group/t/using-mesh-builder-xyz/66/3
-    """
-    
-    dom_x, dom_z, delta_h = domain
-    xi, xf, zf, zi = core_domain
-    
-    electrode_locations = np.c_[dados.survey.locations_a, dados.survey.locations_b,
-                                dados.survey.locations_m, dados.survey.locations_n]
-    unique_locations = np.unique(np.reshape(electrode_locations, (4*dados.survey.nD, 2)), axis=0)
 
-    mesh = mesh_builder_xyz(unique_locations, [2.0, 2.0],
-                            padding_distance=[[200.0, 200.0], [200.0, 0.0]],
-                            mesh_type='tree')
-    mesh = _refine_mesh_topography(mesh, topo_xyz)
-    mesh = _refine_mesh_electrodes(mesh, dc_data)
-    mesh = _refine_mesh_core(mesh, xi, xf, zf, zi)
-    mesh.finalize()
-    return mesh
 
 
 def _define_base_mesh(domain_width_x, domain_width_z, dh):
@@ -122,10 +102,8 @@ def _refine_mesh_topography(mesh, topo_xyz):
 
 
 def _refine_mesh_electrodes(mesh, dc_data):
-    electrode_locations = np.c_[dc_data.survey.locations_a, dc_data.survey.locations_b,
-                                dc_data.survey.locations_m, dc_data.survey.locations_n]
-    unique_locations = np.unique(np.reshape(electrode_locations, (4*dc_data.survey.nD, 2)), axis=0)
-    return refine_tree_xyz(mesh, unique_locations, octree_levels=[4, 4], 
+    coordinates = _get_unique_electrode_locations(dc_data)
+    return refine_tree_xyz(mesh, coordinates, octree_levels=[4, 4], 
                            method='radial', finalize=False)
 
 
@@ -222,7 +200,7 @@ def plota_dados(dc_data):
     plt.tight_layout()
 
 
-def plota_resultados(recovered_conductivity_model, topo_xyz, mesh, core_mesh):
+def plota_resultados(recovered_conductivity_model, topo_xyz, mesh):
     ind_active = _get_2d_active_indices(topo_xyz, mesh)
     active_map = maps.InjectActiveCells(mesh, ind_active, CONDUTIVIDADE_AR)
     conductivity_map = active_map * maps.ExpMap()
@@ -236,8 +214,6 @@ def plota_resultados(recovered_conductivity_model, topo_xyz, mesh, core_mesh):
     ax1 = fig.add_axes([0.14, 0.17, 0.68, 0.7])
     mesh.plotImage(recovered_conductivity, normal='Y', ax=ax1, 
                     grid=False, pcolor_opts={'norm': LogNorm(), 'cmap': COLORMAP})
-    ax1.set_xlim(core_mesh[0], core_mesh[1])
-    ax1.set_ylim(core_mesh[2], core_mesh[3])
     ax1.set_title('Modelo Invertido')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Profundidade (m)')
@@ -260,16 +236,59 @@ def plota_malha(mesh):
     plt.tight_layout()
     
 
+
+
+
+
+
+
+def cria_malha_v2(dc_data, topo_xyz, mesh_param):
+    """
+    https://discretize.simpeg.xyz/en/main/api/generated/discretize.utils.mesh_builder_xyz.html
+    
+    https://simpeg.discourse.group/t/using-mesh-builder-xyz/66/3
+    """
+    
+    dh = mesh_param['delta_h']
+    pad = mesh_param['padding']
+    
+    coordinates = _get_unique_electrode_locations(dc_data)
+    mesh = mesh_builder_xyz(coordinates, [dh, dh],
+                            padding_distance=[[pad, pad], [pad, 0.0]],
+                            depth_core=pad,
+                            mesh_type='tree')
+    mesh = _refine_mesh_topography(mesh, topo_xyz)
+    mesh = _refine_mesh_electrodes(mesh, dc_data)
+    
+    
+    
+    x_min, x_max = [np.min(coordinates[:, 0]-pad/2.0), np.max(coordinates[:, 0])+pad/2.0]
+    z_min, z_max = [np.min(coordinates[:, 1]), np.max(coordinates[:, 1])]
+    z_min -= (x_max-x_min) / 2.0
+    
+    mesh = _refine_mesh_core(mesh, x_min, x_max, z_min, z_max)
+    mesh.finalize()
+    return mesh
+
+
+def _get_unique_electrode_locations(dc_data):
+    electrode_locations = np.c_[dc_data.survey.locations_a, dc_data.survey.locations_b,
+                                dc_data.survey.locations_m, dc_data.survey.locations_n]
+    return np.unique(np.reshape(electrode_locations, (4*dc_data.survey.nD, 2)), axis=0)
+
+
+
 # ---------------------------------------------------------------------------
 
-dominio_malha = [2000.0, 1000.0, 9.0]
-foco_malha = [-600.0, 600.0, -300.0, 0.0]
+parametros_malha = {'delta_h': 2.0,
+                    'padding': 200.0}
+
+
 condutividade_background = 1e-2
 
 
 topografia, dados = load_dados()
-# malha = cria_malha(dados, topografia, dominio_malha, foco_malha)
-malha = cria_malha_v2(dados, topografia, dominio_malha, foco_malha)
+malha = cria_malha_v2(dados, topografia, parametros_malha)
 dados.survey = project_surveys_topography(dados, topografia, malha)
 modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
 simulacao = define_simulation_physics(dados, topografia, malha)
@@ -280,16 +299,10 @@ modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inici
 
 plota_dados(dados)
 plota_malha(malha)
-plota_resultados(modelo_invertido, topografia, malha, foco_malha)
+plota_resultados(modelo_invertido, topografia, malha)
 
 
 # ---------------------------------------------------------------------------
-
-
-
-
-
-
 
 
 
