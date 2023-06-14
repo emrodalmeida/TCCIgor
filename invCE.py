@@ -187,15 +187,16 @@ def run_inversion(inv_prob, directives_list, starting_conductivity_model):
     return dc_inversion.run(starting_conductivity_model)
 
 
-def plota_dados(dc_data, dom):
+def plota_dados(dc_data, dom, topo_xyz):
     fig = plt.figure(figsize=FIGSIZE)
     ax1 = fig.add_axes([0.1, 0.3, 0.8, 0.5])
     plot_pseudosection(dc_data, plot_type='contourf', ax=ax1, scale='log', 
                        data_type='apparent conductivity', 
                        cbar_label=r'$\sigma$ (S/m)', mask_topography=True,
                        contourf_opts={'levels': 100, 'cmap': COLORMAP})
+    ax1.plot(topo_xyz[:, 0], topo_xyz[:, 2], 'k', lw=2.0)
     ax1.set_xlim([dom[0], dom[1]])
-    ax1.set_ylim([-1*dom[3], dom[2]])
+    ax1.set_ylim([-1*dom[3], dom[2] + dom[3]*0.05])
     ax1.set_title('Pseudo-seção de condutividade aparente')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Pseudo-profundidade (m)')
@@ -216,8 +217,9 @@ def plota_resultados(recovered_conductivity_model, topo_xyz, mesh, dom):
     ax1 = fig.add_axes([0.14, 0.17, 0.68, 0.7])
     mesh.plotImage(recovered_conductivity, normal='Y', ax=ax1, 
                     grid=False, pcolor_opts={'norm': LogNorm(), 'cmap': COLORMAP})
+    ax1.plot(topo_xyz[:, 0], topo_xyz[:, 2], 'k', lw=2.0)
     ax1.set_xlim([dom[0], dom[1]])
-    ax1.set_ylim([-1*dom[3], dom[2]])
+    ax1.set_ylim([-1*dom[3], dom[2] + dom[3]*0.05])
     ax1.set_title('Modelo Invertido')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Profundidade (m)')
@@ -230,12 +232,13 @@ def plota_resultados(recovered_conductivity_model, topo_xyz, mesh, dom):
     plt.tight_layout()
 
 
-def plota_malha(mesh, dom):
+def plota_malha(mesh, dom, topo_xyz):
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_axes([0.1, 0.1, 0.75, 0.85])
     mesh.plotGrid(ax=ax1)
+    ax1.plot(topo_xyz[:, 0], topo_xyz[:, 2], 'k', lw=2.0)
     ax1.set_xlim([dom[0], dom[1]])
-    ax1.set_ylim([-1*dom[3], dom[2]])
+    ax1.set_ylim([-1*dom[3], dom[2] + dom[3]*0.05])
     ax1.set_title('Discretização do espaço do modelo')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Profundidade (m)')
@@ -284,27 +287,27 @@ def _calc_core_coordinates(coord, pad):
 
 
 
-if __name__=='__main__':
-    topografia, dados = load_dados()
+#if __name__=='__main__':
+topografia, dados = load_dados()
 
-    parametros_malha = {'delta_h': 2.0,
-                        'padding': 200.0}
-    malha = cria_malha_v2(dados, topografia, parametros_malha)
-    
-    dados.survey = project_surveys_topography(dados, topografia, malha)
-    
-    condutividade_background = 1e-2
-    modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
-    
-    simulacao = define_simulation_physics(dados, topografia, malha)
-    problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inicial, simulacao)
-    lista_diretivas = define_inversion_directives()
-    modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
-    
-    dominio_dados = [-450.0, 450.0, 0.0, 300.0]
-    plota_dados(dados, dominio_dados)
-    plota_malha(malha, dominio_dados)
-    plota_resultados(modelo_invertido, topografia, malha, dominio_dados)
+parametros_malha = {'delta_h': 2.0,
+                    'padding': 200.0}
+malha = cria_malha_v2(dados, topografia, parametros_malha)
+
+dados.survey = project_surveys_topography(dados, topografia, malha)
+
+condutividade_background = 1e-2
+modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
+
+simulacao = define_simulation_physics(dados, topografia, malha)
+problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inicial, simulacao)
+lista_diretivas = define_inversion_directives()
+modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
+
+dominio_dados = [-450.0, 450.0, 0.0, 300.0]
+plota_dados(dados, dominio_dados, topografia)
+plota_malha(malha, dominio_dados, topografia)
+plota_resultados(modelo_invertido, topografia, malha, dominio_dados)
 
 
 # ---------------------------------------------------------------------------
