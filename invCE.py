@@ -33,12 +33,12 @@ except ImportError:
 FIGSIZE = (8, 5)
 COLORMAP = mpl.cm.jet
 CONDUTIVIDADE_AR = 1e-8
-
+OCTREE_LEVELS = [4, 6, 8]
 
 
 def load_dados():
     topo_xyz = np.loadtxt("topo_zero_xyz.txt")
-    dc_data = read_dcip2d_ubc("dados_ce_exemplo_volt_general.dat", "volt", "general")
+    dc_data = read_dcip2d_ubc("dados_ce_PD_exemplo_volt.dat", "volt", "general")
     dc_data = _assign_uncertainty(dc_data)
     return [topo_xyz, dc_data]
 
@@ -109,27 +109,31 @@ def _refine_mesh_topography(mesh, topo_xyz):
     topo_2d = topo_xyz[:, [0, -1]]
     
     """
-    octree_levels: Minimum number of cells around points in each k octree 
-    level starting from the smallest cells size; i.e. [nc(k), nc(k-1), …]. 
-    Note that you can set entries to 0; e.g. you don’t want to discretize 
-    using the smallest cell size.
+    https://github.com/simpeg/discretize/issues/254
     
-    https://discretize.simpeg.xyz/en/main/api/generated/discretize.utils.refine_tree_xyz.html#discretize.utils.refine_tree_xyz
+    The discretization around that points is going to depend on the list you 
+    entered for levels. Let levels = [4, 6, 8] and assume the smallest cells 
+    (base cell) in your tree mesh have side length h. Because the first entry 
+    in levels is 4, your mesh will use the smallest cell size within a radius 
+    of 4 x h around the point your provided. The second entry in levels is 
+    a 6, so within a radius of 6 x (2h), your cells will have widths of 2h. 
+    And with a radius of 8 x (4h) your cells will have widths 4h. And so 
+    forth until you reach the maximum allowable cells size for the mesh.
     """
     return refine_tree_xyz(mesh, topo_2d, method='surface', 
-                           octree_levels=[0, 0, 4, 4], finalize=False)
+                           octree_levels=OCTREE_LEVELS, finalize=False)
 
 
 def _refine_mesh_electrodes(mesh, dc_data):
     coordinates = _get_unique_electrode_locations(dc_data)
-    return refine_tree_xyz(mesh, coordinates, octree_levels=[4, 4], 
+    return refine_tree_xyz(mesh, coordinates, octree_levels=OCTREE_LEVELS, 
                            method='radial', finalize=False)
 
 
 def _refine_mesh_core(mesh, xi, xf, zf, zi):
     xp, zp = np.meshgrid([xi, xf], [zf, zi])
     xyz = np.c_[mkvc(xp), mkvc(zp)]
-    return refine_tree_xyz(mesh, xyz, octree_levels=[0, 2, 4, 8], method='box', finalize=False)
+    return refine_tree_xyz(mesh, xyz, octree_levels=OCTREE_LEVELS, method='box', finalize=False)
 
 
 def project_surveys_topography(dc_data, topo_xyz, mesh):
@@ -285,7 +289,7 @@ def plota_malha(mesh, dc_data, topo_xyz):
 # ---------------------------------------------------------------------------
 
 
-parametros_malha = {'delta_h': 0.01, 'padding': 10.0}
+parametros_malha = {'delta_h': 0.1, 'padding': 10.0}
 condutividade_background = 1e-2
 
 
