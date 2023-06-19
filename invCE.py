@@ -36,12 +36,35 @@ CONDUTIVIDADE_AR = 1e-8
 OCTREE_LEVELS = [4, 6, 8]
 
 
-def load_dados():
-    topo_xyz = np.loadtxt("topo_zero_xyz.txt")
-    dc_data = read_dcip2d_ubc("dados_ce_PD_exemplo_volt.dat", "volt", "general")
+def load_dados(data_file, topo_file=None):
+    dc_data = read_dcip2d_ubc(data_file, "volt", "general")
     dc_data = _assign_uncertainty(dc_data)
+    
+    if topo_file:
+        topo_xyz = np.loadtxt(topo_file)
+    else:
+        topo_xyz = create_zero_topography(dc_data)
     return [topo_xyz, dc_data]
 
+
+def create_zero_topography(dc_data):
+    x_domain = _get_unique_electrode_locations(dc_data)[:, 0]
+    xmin, xmax = [np.min(x_domain), np.max(x_domain)]
+    half_x_width = (xmax - xmin) / 2.0
+    xmin -= half_x_width
+    xmax += half_x_width
+    
+    x = np.linspace(xmin, xmax, 250, endpoint=True)
+    y = np.copy(x)
+    
+    Z = np.zeros((len(x)*len(y), 1))
+    
+    Y, X = np.meshgrid(x, y)
+    Y = Y.reshape([-1, 1])
+    X = X.reshape([-1, 1])
+    
+    return np.concatenate([X, Y, Z], axis=1)
+    
 
 def _assign_uncertainty(dc_data):
     # Inversion with SimPEG requires that we define the uncertainties on 
@@ -191,7 +214,7 @@ def define_inversion_directives():
     # time the the inverse problem is solved.
     # coolingRate: number of Gauss-Newton iterations for each trade-off 
     # paramter value.
-    beta_schedule = directives.BetaSchedule(coolingFactor=3, coolingRate=2)
+    beta_schedule = directives.BetaSchedule(coolingFactor=2, coolingRate=2)
     
     # chi: stopping criteria for the inversion
     target_misfit = directives.TargetMisfit(chifact=1)
@@ -289,13 +312,10 @@ def plota_malha(mesh, dc_data, topo_xyz):
 # ---------------------------------------------------------------------------
 
 
-parametros_malha = {'delta_h': 0.1, 'padding': 10.0}
+parametros_malha = {'delta_h': 0.2, 'padding': 10.0}
 condutividade_background = 1e-2
-
-
-topografia, dados = load_dados()
+topografia, dados = load_dados('..\dados\CE1.dat')
 plota_dados(dados, topografia)
-
 
 malha = cria_malha(dados, topografia, parametros_malha)
 plota_malha(malha, dados, topografia)
