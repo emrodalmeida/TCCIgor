@@ -21,7 +21,8 @@ from SimPEG import (maps, data_misfit, regularization, optimization,
                     inverse_problem, inversion, directives)
 
 from SimPEG.electromagnetics.static import resistivity as dc
-from SimPEG.electromagnetics.static.utils.static_utils import plot_pseudosection
+from SimPEG.electromagnetics.static.utils.static_utils import (plot_pseudosection,  
+                                                               pseudo_locations)
 from SimPEG.utils.io_utils.io_utils_electromagnetics import read_dcip2d_ubc
 
 try:
@@ -240,9 +241,14 @@ def plota_dados(dc_data, topo_xyz):
                        data_type='apparent conductivity', 
                        cbar_label=r'$\sigma$ (S/m)', mask_topography=True,
                        contourf_opts={'levels': 100, 'cmap': COLORMAP})
+    
+    x = pseudo_locations(dados.survey)[:, 0]
+    y = pseudo_locations(dados.survey)[:, 1]
+    
+    ax1.scatter(x, y, marker='.', s=10.0, c='k')
     ax1.plot(topo_xyz[:, 0], topo_xyz[:, -1], 'k', lw=2.0)
     ax1.set_xlim(_get_survey_limits(dc_data))
-    ax1.set_ylim(-1 * _get_survey_length(dc_data) / 3.0, 
+    ax1.set_ylim(np.min(y) + 0.1*np.min(y), 
                  np.max(topo_xyz[:, -1]) + _get_survey_length(dc_data)*0.05)
     ax1.set_title('Pseudo-seção de condutividade aparente')
     ax1.set_xlabel('Distância (m)')
