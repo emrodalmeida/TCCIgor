@@ -85,16 +85,18 @@ def cria_malha(dc_data, topo_xyz, mesh_param):
    
     dh = mesh_param['delta_h']
     pad = mesh_param['padding']
-    
-    coordinates = _get_unique_electrode_locations(dc_data)
-    mesh = mesh_builder_xyz(coordinates, [dh, dh],
+    core_depth = np.min(pseudo_locations(dc_data.survey)[:, 1])
+    x_coordinates = _get_unique_electrode_locations(dc_data)
+    x_min, x_max = [np.min(x_coordinates), np.max(x_coordinates)]
+    x_min -= pad / 2.0
+    x_max += pad / 2.0
+    mesh = mesh_builder_xyz(x_coordinates, [dh, dh],
                             padding_distance=[[pad, pad], [pad, 0.0]],
-                            depth_core=pad,
+                            depth_core=core_depth + 2.0 * pad,
                             mesh_type='tree')
     mesh = _refine_mesh_topography(mesh, topo_xyz)
     mesh = _refine_mesh_electrodes(mesh, dc_data)
-    x_min, x_max, z_min, z_max = _calc_core_coordinates(coordinates, pad)    
-    mesh = _refine_mesh_core(mesh, x_min, x_max, z_min, z_max)
+    mesh = _refine_mesh_core(mesh, x_min, x_max, core_depth, np.max(topo_xyz[:, -1]))
     mesh.finalize()
     return mesh
 
@@ -103,13 +105,6 @@ def _get_unique_electrode_locations(dc_data):
     electrode_locations = np.c_[dc_data.survey.locations_a, dc_data.survey.locations_b,
                                 dc_data.survey.locations_m, dc_data.survey.locations_n]
     return np.unique(np.reshape(electrode_locations, (4*dc_data.survey.nD, 2)), axis=0)
-
-
-def _calc_core_coordinates(coord, pad):
-    xmin, xmax = [np.min(coord[:, 0] - pad/2.0), np.max(coord[:, 0]) + pad/2.0]
-    zmin, zmax = [np.min(coord[:, 1]), np.max(coord[:, 1])]
-    zmin -= (xmax - xmin) / 2.0
-    return [xmin, xmax, zmin, zmax]
 
 
 def _define_base_mesh(domain_width_x, domain_width_z, dh):
@@ -215,7 +210,7 @@ def define_inversion_directives():
     # time the the inverse problem is solved.
     # coolingRate: number of Gauss-Newton iterations for each trade-off 
     # paramter value.
-    beta_schedule = directives.BetaSchedule(coolingFactor=2, coolingRate=2)
+    beta_schedule = directives.BetaSchedule(coolingFactor=3, coolingRate=2)
     
     # chi: stopping criteria for the inversion
     target_misfit = directives.TargetMisfit(chifact=1)
@@ -320,13 +315,13 @@ def plota_malha(mesh, dc_data, topo_xyz):
 
 parametros_malha = {'delta_h': 0.2, 'padding': 10.0}
 condutividade_background = 1e-2
-topografia, dados = load_dados('..\dados\CE1.dat')
+topografia, dados = load_dados('..\dados\CE2.dat')
 plota_dados(dados, topografia)
 
 malha = cria_malha(dados, topografia, parametros_malha)
 plota_malha(malha, dados, topografia)
 
-
+"""
 dados.survey = project_surveys_topography(dados, topografia, malha)
 modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
 simulacao = define_simulation_physics(dados, topografia, malha)
@@ -334,7 +329,7 @@ problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inici
 lista_diretivas = define_inversion_directives()
 modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
 plota_resultados(modelo_invertido, topografia, malha, dados)
-
+"""
 
 # ---------------------------------------------------------------------------
 
