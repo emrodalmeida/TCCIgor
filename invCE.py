@@ -34,7 +34,7 @@ except ImportError:
 FIGSIZE = (8, 5)
 COLORMAP = mpl.cm.jet
 CONDUTIVIDADE_AR = 1e-8
-OCTREE_LEVELS = [4, 6, 8]
+OCTREE_LEVELS = [4, 4, 4]
 
 
 def load_dados(data_file, topo_file=None):
@@ -51,9 +51,9 @@ def load_dados(data_file, topo_file=None):
 def create_zero_topography(dc_data):
     x_domain = _get_unique_electrode_locations(dc_data)[:, 0]
     xmin, xmax = [np.min(x_domain), np.max(x_domain)]
-    half_x_width = (xmax - xmin) / 2.0
-    xmin -= half_x_width
-    xmax += half_x_width
+    x_width = (xmax - xmin)
+    xmin -= x_width / 3.0
+    xmax += x_width / 3.0
     
     x = np.linspace(xmin, xmax, 250, endpoint=True)
     y = np.copy(x)
@@ -244,7 +244,7 @@ def plota_dados(dc_data, topo_xyz):
     ax1.plot(topo_xyz[:, 0], topo_xyz[:, -1], 'k', lw=2.0)
     ax1.set_xlim(_get_survey_limits(dc_data))
     ax1.set_ylim(np.min(y) + 0.1*np.min(y), 
-                 np.max(topo_xyz[:, -1]) + _get_survey_length(dc_data)*0.05)
+                 np.max(topo_xyz[:, -1]) - np.max(y) / 2.0)
     ax1.set_title('Pseudo-seção de condutividade aparente')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Pseudo-profundidade (m)')
@@ -255,6 +255,7 @@ def _get_survey_limits(dc_data):
     xmin = np.min(dc_data.survey.unique_electrode_locations[:, 0])
     xmax = np.max(dc_data.survey.unique_electrode_locations[:, 0])
     return xmin, xmax
+
 
 def _get_survey_length(dc_data):
     xmin, xmax = _get_survey_limits(dc_data)
@@ -296,9 +297,6 @@ def plota_malha(mesh, dc_data, topo_xyz):
     ax1 = fig.add_axes([0.1, 0.1, 0.75, 0.85])
     mesh.plotGrid(ax=ax1)
     ax1.plot(topo_xyz[:, 0], topo_xyz[:, -1], 'k', lw=2.0)
-    #ax1.set_xlim(_get_survey_limits(dc_data))
-    #ax1.set_ylim(np.min(pseudo_locations(dc_data.survey)[:, 1]), 
-    #             -1 * np.max(pseudo_locations(dc_data.survey)[:, 1]))
     ax1.set_title('Discretização do espaço do modelo')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Profundidade (m)')
@@ -321,7 +319,7 @@ plota_dados(dados, topografia)
 malha = cria_malha(dados, topografia, parametros_malha)
 plota_malha(malha, dados, topografia)
 
-"""
+
 dados.survey = project_surveys_topography(dados, topografia, malha)
 modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
 simulacao = define_simulation_physics(dados, topografia, malha)
@@ -329,7 +327,7 @@ problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inici
 lista_diretivas = define_inversion_directives()
 modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
 plota_resultados(modelo_invertido, topografia, malha, dados)
-"""
+
 
 # ---------------------------------------------------------------------------
 
