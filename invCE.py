@@ -296,9 +296,9 @@ def plota_malha(mesh, dc_data, topo_xyz):
     ax1 = fig.add_axes([0.1, 0.1, 0.75, 0.85])
     mesh.plotGrid(ax=ax1)
     ax1.plot(topo_xyz[:, 0], topo_xyz[:, -1], 'k', lw=2.0)
-    ax1.set_xlim(_get_survey_limits(dc_data))
-    ax1.set_ylim(-1 * _get_survey_length(dc_data) / 1.5, 
-                 np.max(topo_xyz[:, -1]) + _get_survey_length(dc_data)*0.05)
+    #ax1.set_xlim(_get_survey_limits(dc_data))
+    #ax1.set_ylim(np.min(pseudo_locations(dc_data.survey)[:, 1]), 
+    #             -1 * np.max(pseudo_locations(dc_data.survey)[:, 1]))
     ax1.set_title('Discretização do espaço do modelo')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Profundidade (m)')
@@ -315,7 +315,7 @@ def plota_malha(mesh, dc_data, topo_xyz):
 
 parametros_malha = {'delta_h': 0.2, 'padding': 10.0}
 condutividade_background = 1e-2
-topografia, dados = load_dados('..\dados\CE2.dat')
+topografia, dados = load_dados('..\dados\CE2_editado.dat')
 plota_dados(dados, topografia)
 
 malha = cria_malha(dados, topografia, parametros_malha)
