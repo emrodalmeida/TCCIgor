@@ -18,10 +18,13 @@ from discretize import TreeMesh
 from discretize.utils import mkvc, refine_tree_xyz, active_from_xyz, mesh_builder_xyz
 
 from SimPEG import (maps, data_misfit, regularization, optimization,
-                    inverse_problem, inversion, directives)
+                    inverse_problem, inversion, directives, utils)
+
+from SimPEG.utils import model_builder
 
 from SimPEG.electromagnetics.static import resistivity as dc
-from SimPEG.electromagnetics.static.utils.static_utils import (plot_pseudosection,  
+from SimPEG.electromagnetics.static.utils.static_utils import (plot_pseudosection,
+                                                               apparent_resistivity_from_voltage,
                                                                pseudo_locations)
 from SimPEG.utils.io_utils.io_utils_electromagnetics import read_dcip2d_ubc
 
@@ -191,41 +194,45 @@ def define_simulation_physics(dc_data, topo_xyz, mesh):
 def define_inverse_problem(dc_data, topo_xyz, mesh, starting_model, simulation):
     ind_active = _get_2d_active_indices(topo_xyz, mesh)
     dmis = data_misfit.L2DataMisfit(data=dc_data, simulation=simulation)
-    reg = regularization.Simple(malha, indActive=ind_active, 
-                                mref=starting_model, alpha_s=0.01, 
+    
+    regmap = maps.IdentityMap(nP=int(ind_active.sum))
+    reg = regularization.Sparse(malha, indActive=ind_active, 
+                                reference_model=starting_model, 
+                                mapping=regmap,
+                                gradient_type='total',
+                                alpha_s=0.01, 
                                 alpha_x=1.0, alpha_y=1.0)
 
-    reg.mrefInSmooth = True
+    reg.reference_model_in_smooth = True
+    p = 0
+    qx = 1
+    qz = 1
+    reg.norms = [p, qx, qz]    
+    
     opt = optimization.InexactGaussNewton(maxIter=40)
     return inverse_problem.BaseInvProblem(dmis, reg, opt)
 
 
 def define_inversion_directives():
     update_sensibility_weighting = directives.UpdateSensitivityWeights()
-
+    
+    # Reach target misfit for L2 solution, then use IRLS until model stops changing.
+    update_IRLS = directives.Update_IRLS(max_irls_iterations=25, minGNiter=1,
+                                         chifact_start=1.0)
+        
     # beta: trade-off parameter between the data misfit and the regularization
     starting_beta = directives.BetaEstimate_ByEig(beta0_ratio=1e1)
-    
-    # coolingFactor: rate of reduction in trade-off parameter (beta) each 
-    # time the the inverse problem is solved.
-    # coolingRate: number of Gauss-Newton iterations for each trade-off 
-    # paramter value.
-    beta_schedule = directives.BetaSchedule(coolingFactor=3, coolingRate=2)
-    
-    # chi: stopping criteria for the inversion
-    target_misfit = directives.TargetMisfit(chifact=1)
     
     save_iteration = directives.SaveOutputEveryIteration(save_txt=False)
     update_jacobi = directives.UpdatePreconditioner()
     
-    return [update_sensibility_weighting, starting_beta, beta_schedule, 
-            save_iteration, target_misfit, update_jacobi]
+    return [update_sensibility_weighting, update_IRLS, starting_beta,
+            save_iteration, update_jacobi]
 
 
 def run_inversion(inv_prob, directives_list, starting_conductivity_model):
     dc_inversion = inversion.BaseInversion(inv_prob, 
                                            directiveList=directives_list)
-
     return dc_inversion.run(starting_conductivity_model)
 
 
@@ -311,8 +318,8 @@ def plota_malha(mesh, dc_data, topo_xyz):
 # ---------------------------------------------------------------------------
 
 
-parametros_malha = {'delta_h': 0.2, 'padding': 10.0}
-condutividade_background = 1e-2
+parametros_malha = {'delta_h': 0.5, 'padding': 10.0}
+condutividade_background = 1e-3
 topografia, dados = load_dados('..\dados\CE2_editado.dat')
 plota_dados(dados, topografia)
 
