@@ -18,9 +18,7 @@ from discretize import TreeMesh
 from discretize.utils import mkvc, refine_tree_xyz, active_from_xyz, mesh_builder_xyz
 
 from SimPEG import (maps, data_misfit, regularization, optimization,
-                    inverse_problem, inversion, directives, utils)
-
-from SimPEG.utils import model_builder
+                    inverse_problem, inversion, directives)
 
 from SimPEG.electromagnetics.static import resistivity as dc
 from SimPEG.electromagnetics.static.utils.static_utils import (plot_pseudosection,
@@ -28,10 +26,12 @@ from SimPEG.electromagnetics.static.utils.static_utils import (plot_pseudosectio
                                                                pseudo_locations)
 from SimPEG.utils.io_utils.io_utils_electromagnetics import read_dcip2d_ubc
 
-try:
-    from pymatsolver import Pardiso as Solver
-except ImportError:
-    from SimPEG import SolverLU as Solver
+#try:
+#    from pymatsolver import Pardiso as Solver
+#except ImportError:
+#    from SimPEG import SolverLU as Solver
+
+from SimPEG import SolverLU as Solver
 
 
 FIGSIZE = (8, 5)
@@ -108,23 +108,6 @@ def _get_unique_electrode_locations(dc_data):
     electrode_locations = np.c_[dc_data.survey.locations_a, dc_data.survey.locations_b,
                                 dc_data.survey.locations_m, dc_data.survey.locations_n]
     return np.unique(np.reshape(electrode_locations, (4*dc_data.survey.nD, 2)), axis=0)
-
-
-def _define_base_mesh(domain_width_x, domain_width_z, dh):
-    n_cels_x = 2**int(np.round(np.log(domain_width_x / dh) / np.log(2.0)))
-    n_cels_z = 2**int(np.round(np.log(domain_width_z / dh) / np.log(2.0)))
-
-    hx = [(dh, n_cels_x)]
-    hz = [(dh, n_cels_z)]
-    
-    """
-    {‘0’, ‘C’, ‘N’} a str specifying whether the zero coordinate along each axis 
-    is the first node location (‘0’), in the center (‘C’) or the last node 
-    location (‘N’)
-    
-    https://discretize.simpeg.xyz/en/main/api/generated/discretize.TreeMesh.html#discretize.TreeMesh
-    """
-    return TreeMesh([hx, hz], x0='CN')
 
 
 def _refine_mesh_topography(mesh, topo_xyz):
@@ -209,7 +192,7 @@ def define_inverse_problem(dc_data, topo_xyz, mesh, starting_model, simulation):
     qz = 1
     reg.norms = [p, qx, qz]    
     
-    opt = optimization.InexactGaussNewton(maxIter=40)
+    opt = optimization.InexactGaussNewton(maxIter=25)
     return inverse_problem.BaseInvProblem(dmis, reg, opt)
 
 
@@ -289,9 +272,9 @@ def plota_resultados(recovered_conductivity_model, topo_xyz, mesh, dc_data):
     ax1.set_xlim(_get_survey_limits(dc_data))
     ax1.set_ylim(-1 * _get_survey_length(dc_data) / 1.5, 
                  np.max(topo_xyz[:, -1]) + _get_survey_length(dc_data)*0.05)
-    ax1.set_title('Modelo Invertido')
-    ax1.set_xlabel('Distância (m)')
-    ax1.set_ylabel('Profundidade (m)')
+    ax1.set_title('Inverted Model')
+    ax1.set_xlabel('Distance (m)')
+    ax1.set_ylabel('Depth (m)')
     
     ax2 = fig.add_axes([0.84, 0.17, 0.03, 0.7])
     cbar = mpl.colorbar.ColorbarBase(ax2, norm=norm, orientation='vertical',
@@ -330,27 +313,17 @@ plota_malha(malha, dados, topografia)
 
 
 dados.survey = project_surveys_topography(dados, topografia, malha)
+
+
+
+
 modelo_inicial = set_starting_model(condutividade_background, topografia, malha)
 simulacao = define_simulation_physics(dados, topografia, malha)
 problema_inverso = define_inverse_problem(dados, topografia, malha, modelo_inicial, simulacao)
 lista_diretivas = define_inversion_directives()
 modelo_invertido = run_inversion(problema_inverso, lista_diretivas, modelo_inicial)
+
 plota_resultados(modelo_invertido, topografia, malha, dados)
-
-
-# ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
