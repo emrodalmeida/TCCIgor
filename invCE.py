@@ -195,7 +195,7 @@ def define_inverse_problem(dc_data, topo_xyz, mesh, starting_model, simulation):
     ind_active = _get_2d_active_indices(topo_xyz, mesh)
     dmis = data_misfit.L2DataMisfit(data=dc_data, simulation=simulation)
     
-    regmap = maps.IdentityMap(nP=int(ind_active.sum))
+    regmap = maps.IdentityMap(nP=int(ind_active.sum()))
     reg = regularization.Sparse(malha, indActive=ind_active, 
                                 reference_model=starting_model, 
                                 mapping=regmap,
@@ -237,12 +237,14 @@ def run_inversion(inv_prob, directives_list, starting_conductivity_model):
 
 
 def plota_dados(dc_data, topo_xyz):
+    rho_a = apparent_resistivity_from_voltage(dc_data.survey, dc_data.dobs)
+    
     fig = plt.figure(figsize=FIGSIZE)
     ax1 = fig.add_axes([0.1, 0.3, 0.8, 0.5])
-    plot_pseudosection(dc_data, plot_type='contourf', ax=ax1, scale='log', 
-                       data_type='apparent conductivity', 
-                       cbar_label=r'$\sigma$ (S/m)', mask_topography=True,
-                       contourf_opts={'levels': 100, 'cmap': COLORMAP})
+    plot_pseudosection(dc_data.survey, rho_a,
+                       plot_type='contourf', ax=ax1, scale='log', 
+                       cbar_label=r'$\rho$ ($\Omega$.m)', mask_topography=True,
+                       contourf_opts={'levels': 30, 'cmap': COLORMAP})
     
     x = pseudo_locations(dados.survey)[:, 0]
     y = pseudo_locations(dados.survey)[:, 1]
@@ -252,7 +254,7 @@ def plota_dados(dc_data, topo_xyz):
     ax1.set_xlim(_get_survey_limits(dc_data))
     ax1.set_ylim(np.min(y) + 0.1*np.min(y), 
                  np.max(topo_xyz[:, -1]) - np.max(y) / 2.0)
-    ax1.set_title('Pseudo-seção de condutividade aparente')
+    ax1.set_title('Pseudo-seção de resistividade aparente')
     ax1.set_xlabel('Distância (m)')
     ax1.set_ylabel('Pseudo-profundidade (m)')
     plt.tight_layout()
